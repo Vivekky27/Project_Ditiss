@@ -1,0 +1,6 @@
+pip3 install pyTelegramBotAPI
+pip3 install PyGithub
+pip3 install requests      or  
+python3 -m pip install requests
+pip3 install boto3
+pip3 install tabulate
