@@ -1,0 +1,75 @@
+#This is the second script which will be run by jenkins after the initial commit from first script.
+#This script is used to send the http request to burpsuite (API) after reading the content from github repo which we commited from first script. This script will start the scanning process after making a http request to burpsuite using requests.post() method.
+
+#-------------------------------------STEPS-------------------------------------#
+
+#When the 'url_to_be_scanned.txt' file is commited using the first script in github repo, A jenkins build will automatically trigger itself and will try to run this second script present in ec2 instance.
+#When this second script is triggered by jenkins, it will download the url_to_be_scanned.txt file from github repo. 
+#Then this script will try to read the 'url_to_be_scanned.txt' which contain the info submitted by user using telegram and the message chat id of telegram.
+#After reading the 'url_to_be_scanned.txt' file, it will send a post request to burpsuite (using requests.post()) for scanning.
+#If a error is encounter while sending the request, error message will be given/returned to the user in telegram.
+#If there is no error and request is submitted successfully, then the scanning will start.
+#If a request is submitted successfully, it will return a task_id in it's header response under the name of location. This task_id is needed by the third script to find if the current scanning request is completed or not.
+#When we get this task_id, we will update this task_id in the "scanning.txt" file present in github repo, so that this can be read by out third script.
+
+import os,json,requests, telebot
+from github import Github
+
+bot = telebot.TeleBot("6270115304:AAGikiCbTcAcB2qa7RMdXURLVICWDFWPVEc", parse_mode=None)
+git = Github("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")
+
+################################-----Github-----##########################################
+
+def send_to_github(usr_input):
+    repo = git.get_repo("Vivekky27/Project_Ditiss")
+    usr_input=str(usr_input).strip()
+    try:
+        file = repo.get_contents("scanning.txt",ref='side')
+        prev_data = file.decoded_content.decode().strip()
+        if 'ContentFile(path="scanning.txt")' in prev_data:
+            prev_data.replace('ContentFile(path="scanning.txt") ','')
+
+        if prev_data!='':
+            repo.update_file(file.path, "New commit", f"{prev_data},{usr_input}", file.sha, branch="side")
+        else:
+            repo.update_file(file.path, "New commit", f"{usr_input}", file.sha, branch="side")
+    except:
+        repo.create_file("scanning.txt", 'NEW COMMIT', usr_input, branch="side")
+
+################################-----Github-----##########################################
+
+
+################################-----Download file from Github-----##########################################
+
+
+def read_input_from_github():
+    repo = git.get_repo("Vivekky27/Project_Ditiss")
+    file = repo.get_contents("url_to_be_scanned.txt")
+    prev_data = file.decoded_content.decode()
+    return prev_data
+
+output=read_input_from_github()
+output=output.split("~~")
+
+################################-----Download file from Github-----##########################################
+
+
+################################-----Make request to Burpsuite-----##########################################
+
+payload=str(output[0])
+url = 'https://27a2-45-250-227-175.in.ngrok.io/v0.1/scan'
+r = requests.post(url, data=payload)
+
+if r.status_code==201 or r.status_code==200:
+    location=r.headers['location']
+    bot.send_message(output[1], 'Request has been submitted successfully, Kindly wait for the process to be completed successfully.')
+    send_to_github(location)
+elif r.status_code==500:
+    error_output=json.loads(r.text)
+    bot.send_message(output[1], 'Request cannot be submitted, Error : '+error_output['error'])
+else:
+    error_output=json.loads(r.text)
+    bot.send_message(output[1], 'Request cannot be submitted, Error : '+error_output['error'])
+
+
+################################-----Make request to Burpsuite-----##########################################
